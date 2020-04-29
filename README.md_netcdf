@@ -1,4 +1,4 @@
-# hrldas-release
+# HRLDAS_forcing for reading GLDAS V2.1 in NetCDF4 format
 Zhe's modification in HRLDAS_forcing 
 allows reading forcing from GLDAS in netcdf format 
 
