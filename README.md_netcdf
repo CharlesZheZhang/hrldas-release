@@ -1,5 +1,29 @@
 # HRLDAS_forcing for reading GLDAS V2.1 in NetCDF4 format
+## 2020-04-26
 Zhe's modification in HRLDAS_forcing 
 allows reading forcing from GLDAS in netcdf format 
 
 Major changes are in /hrldas-release/HRLDAS/HRLDAS_forcing/run/example/GLDAS/ and create_forcing.F
+
+create_forcing.F for reading GLDAS V2.1 in netCDF4
+
+The original call sequence for reading grib data was:
+call process 
+    call grib_file_search_now
+        call get_single_data_struct_from_grib
+            call read_grib_unit
+
+Now, subroutines are created ("read_netcdf_unit" and get_single_data_struct_from_netcdf) 
+These two subroutines are called under get_single_data_struct_from_grib (I didn't change the name of this subroutine).
+The current call sequence is:
+call process 
+    call grib_file_search_now
+        call get_single_data_struct_from_netcdf
+            call read_netcdf_unit
+            
+Then, the expand_9pt_input and remap subroutine are called as normal.
+One more note is "expand_9pt_input" was called only in get_single_data_struct_from_grib in previous version. 
+However, since GLDAS data are in 3-hr output, hence, temporal interpolation is needed. Thus, "expand_9pt_input" is called in
+get_single_file_search_future as well. This is to smooth the data field read from future time for temporal interpolation. 
+
+Compare this branch with Mike's release branch for full comparison.
