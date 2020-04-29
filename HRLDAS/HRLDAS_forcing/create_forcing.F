@@ -1,12 +1,24 @@
+module variables
+
+  type string
+
+    character(len=:), allocatable :: str
+
+  end type string
+
+end module variables
+
 program create_forcing
+  use netcdf 
   use module_grib
   use module_geo_em
   use kwm_grid_utilities
   use kwm_date_utilities
   use kwm_string_utilities
+  use variables
   implicit none
 
-  character(len=9), parameter :: version = "v20150518"
+  character(len=9), parameter :: version = "v20200426"
 
   character(len=256) :: namelist_file
   character(len=13) :: date
@@ -915,7 +927,8 @@ contains
 
        return
     endif
-
+    print *, "I am here before calling grib_file_search_now for the first time"
+    print *, "current file name is: ", teststring 
     call grib_file_search_now(current, datastruct, ierr)
 
     if (ierr == 0) then
@@ -1085,8 +1098,11 @@ contains
 
     call grib_file_search_future(current, post, datastruct, ierr)
 
-    if (ierr /= 0) then
+    ! Also call expand_9pt_input in future file
+    if(expand_loop > 0) call expand_9pt_input(datastruct%data,datastruct%nx, datastruct%ny, expand_loop)
 
+    if (ierr /= 0) then
+  
        if (current%fatality == 2) then
           allocate(current%field(idim, jdim))
           current%field = -1.E36
@@ -1165,14 +1181,17 @@ contains
        hold = data
        do i = 1, nx
           do k = 1, ny
-             if (hold(i,k) < -1e10 ) then
+             if (hold(i,k) < -1e1 ) then
+             !if (hold(i,k) < -1e10 ) then
                 ilo = max( 1,i-1)
                 ihi = min(nx,i+1)
                 klo = max( 1,k-1)
                 khi = min(ny,k+1)
-                testnum = count(hold(ilo:ihi,klo:khi) > -1e10)
+                testnum = count(hold(ilo:ihi,klo:khi) > -1e1 )
+                !testnum = count(hold(ilo:ihi,klo:khi) > -1e10)
                 if(testnum > 0) then
-                   data(i,k) = sum(hold(ilo:ihi,klo:khi), hold(ilo:ihi,klo:khi) > -1e10)/testnum
+                !   data(i,k) = sum(hold(ilo:ihi,klo:khi), hold(ilo:ihi,klo:khi) > -1e10)/testnum
+                  data(i,k) = sum(hold(ilo:ihi,klo:khi), hold(ilo:ihi,klo:khi) > -1e1 )/testnum
                 endif
              endif
           enddo
@@ -1295,7 +1314,8 @@ contains
     ! If we haven't found any matching data yet, then get out of here.
     if (ierr == 1) return
 
-    call get_single_datastruct_from_grib(trim(flnm), kdate, datastruct, ierr)
+    !call get_single_datastruct_from_grib(trim(flnm), kdate, datastruct, ierr)
+    call get_single_datastruct_from_netcdf(trim(flnm),kdate,datastruct, ierr, current)
     post%hdate = kdate//":00:00"
     post%units = datastruct%units
 
@@ -1343,11 +1363,12 @@ contains
        endif
     enddo TEMPLATE_LOOP
     if (ierr == 1) return
-
+    print *, "current label", current%label
     nullify(datastruct%data)  ! Barlage: move from above
-
-    call get_single_datastruct_from_grib(trim(flnm), kdate, datastruct, ierr)
+    !call get_single_datastruct_from_grib(trim(flnm), kdate, datastruct, ierr)
+    call get_single_datastruct_from_netcdf(trim(flnm),kdate,datastruct, ierr, current)
     current%units = datastruct%units
+    print *, "I am here now, current filename is: ",trim(flnm)
 
     if ( current%label /= datastruct%field ) then
        write(*,'(/,1x,80("*"))')
@@ -1465,6 +1486,159 @@ contains
     call gribclose(gribunit)
 
   end subroutine get_single_datastruct_from_grib
+
+!==============================================================================
+!==============================================================================
+
+  subroutine get_single_datastruct_from_netcdf(ncflnm, kdate, datastruct, ierr, current)
+    use module_grib
+    use netcdf
+    use kwm_string_utilities
+    use module_input_data_structure
+    implicit none
+    character(len=*), intent(in) :: ncflnm, kdate
+    type(DataBuffer), intent(in) :: current
+    ! define some variables for reading ncfile 
+    integer :: ncid
+    
+    ! define data structure
+    type(input_data_type), intent(out) :: datastruct
+    integer, intent(out) :: ierr
+    character(len=256) :: flnm
+
+    !-------------------------------------------------------------------------
+    flnm = ncflnm
+
+    call fill_template(flnm, kdate)
+    ! Open the netcdf file and read data record
+    ierr = nf90_open(flnm,nf90_nowrite,ncid)
+    if (ierr /= 0) then
+      if (ierr ==2) then
+         write(*, '("File does not exist: ",A)') trim(flnm)
+      else
+          write(*, '("Undetermined problem opening file: ", A)') trim(flnm)
+      endif
+      return
+      stop "get_single_datastruct_from_netcdf"
+    endif 
+    if (associated(datastruct%data)) then
+       deallocate(datastruct%data)
+       nullify(datastruct%data)
+    endif
+    call read_netcdf_unit(ncid,datastruct,ierr,current)
+    if (ierr /= 0) then
+       print*, 'Returning error flag from get_single_datastruct_from_netcdf (1)'
+       print*, 'flnm = ', trim(flnm)
+       print*, 'ierr = ', ierr
+       if (associated(datastruct%data)) then
+          deallocate(datastruct%data)
+          nullify(datastruct%data)
+       endif
+       return
+    endif
+    ierr = nf90_close(ncid)
+  end subroutine get_single_datastruct_from_netcdf
+
+
+!==============================================================================
+!==============================================================================
+
+  subroutine read_netcdf_unit(ncid, datastruct, ierr, current)
+    use netcdf 
+    use variables
+    use module_input_data_structure
+    implicit none
+    integer, intent(in)  :: ncid
+    type(string) :: array(20)
+    type(input_data_type), intent(out) :: datastruct
+    type(DataBuffer), intent(in) :: current
+    integer, parameter :: NDIMS = 3, NRECS = 1
+    integer, parameter :: NLATS = 600, NLONS = 1440
+    character (len = *), parameter :: LAT_NAME = "lat"
+    character (len = *), parameter :: LON_NAME = "lon"
+    character (len = *), parameter :: REC_NAME = "time"
+    integer :: lon_dimid, lat_dimid, rec_dimid
+    integer :: start(NDIMS), count(NDIMS)
+    real :: lats(NLATS), lons(NLONS)
+    integer :: ierr, lon_varid, lat_varid
+    integer :: astat
+    character (len = 256) :: VAR_NAME
+    integer :: varid
+    integer :: dimids(NDIMS)
+    ! Read the data into these arrays
+    real :: var_in(NLONS,NLATS)
+    integer :: ndims_in, nvars_in, ngatts_in, unlimdimid_in
+    integer :: lat, lon    
+    array = [string('Tair_f_inst'),string('Qair_f_inst'),string('U_f_inst'),string("V_f_inst"),string("Psurf_f_inst"), & 
+             string("Precf_tavg"),string("SWdown_f_tavg"),string("LWdown_f_tavg"),string("GLDAS_elevation"),string("AvgSurfT_inst"), & 
+             string("SWE_inst"),string("CanopInt_inst"),string("SoilMoi0_10cm_inst"),string("SoilMoi10_40cm_inst"),string("SoilMoi40_100cm_inst"), &
+             string("SoilMoi100_200cm_inst"),string("SoilTMP0_10cm_inst"),string("SoilTMP10_40cm_inst"),string("SoilTMP40_100cm_inst"),string("SoilTMP100_200cm_inst")]
+    nullify(datastruct%data)
+    ! Match the netcdf attribute with one of the Vtable entries
+    print *, "in Varsearch current label: ", current%label
+    VARSEARCH : do j = 1, vtable_count 
+    if (current%label == vtable(j)%name) then 
+        print *, "in Varsearch vtable name: "  , vtable(j)%name
+        VAR_NAME = array(j)%str
+        datastruct%field  = vtable(j)%name
+        datastruct%desc   = vtable(j)%desc
+        datastruct%units  = vtable(j)%units
+        print *, "Be able to retrieve variable name: ",VAR_NAME
+        exit VARSEARCH 
+    endif 
+          if (j == vtable_count) then
+             write(*,'(/," ***** ERROR *****")')
+             write(*,'(" *****       GRIB Edition 1 data does not match a Vtable entry")')
+             stop "Edition 1"
+          endif
+    enddo VARSEARCH 
+    datastruct%nx = NLONS
+    datastruct%ny = NLATS
+    call map_set(PROJ_LATLON, datastruct%proj, lat1=-59.875, lon1=-179.875, &
+         latinc=0.25, loninc=0.25, knowni=1.0, knownj=1.0)
+    if (associated(datastruct%data)) then
+       deallocate(datastruct%data)
+       nullify(datastruct%data)
+    endif
+    allocate(datastruct%data(datastruct%nx,datastruct%ny), stat=astat)
+    if (astat /= 0) stop "Problem (A) allocating datastruct%data"
+    ierr = nf90_inq_varid(ncid, VAR_NAME, varid)
+    ierr = nf90_get_var(ncid, varid, var_in)
+    datastruct%data = var_in 
+! Some modification for SMOIS unit
+    if (datastruct%field(1:6) == "SMOIS_") then
+       ! If units are kg m{-2} (that is, mm), convert to volumetric
+     if ( (datastruct%units == "kg/m^2") .or. (datastruct%units == "mm") ) then
+       print *, "I am in this loop: if units == kg/m^2"
+       write(*,*) "Converting soil water content to volumetric using thickness[m]: ", &
+           (datastruct%layer2 - datastruct%layer1)
+       datastruct%data = datastruct%data * 1.E-3 / (datastruct%layer2 - datastruct%layer1)
+       datastruct%units = "m^3/m^3"
+     elseif (datastruct%units == "gldas") then  ! hack to take care of bad units in GLDAS MBv3.7
+       print *, "I am in this loop: if units == glads"
+       if(datastruct%field(1:7) == "SMOIS_1") datastruct%layer1 = 0
+       if(datastruct%field(1:7) == "SMOIS_1") datastruct%layer2 = 0.1
+       if(datastruct%field(1:7) == "SMOIS_2") datastruct%layer1 = 0.1
+       if(datastruct%field(1:7) == "SMOIS_2") datastruct%layer2 = 0.4
+       if(datastruct%field(1:7) == "SMOIS_3") datastruct%layer1 = 0.4
+       if(datastruct%field(1:7) == "SMOIS_3") datastruct%layer2 = 1.0
+       if(datastruct%field(1:7) == "SMOIS_4") datastruct%layer1 = 1.0
+       if(datastruct%field(1:7) == "SMOIS_4") datastruct%layer2 = 2.0
+       write(*,*) "Converting soil water content to volumetric using thickness[m]: ", &
+           (datastruct%layer2 - datastruct%layer1)
+       datastruct%data = datastruct%data * 1.E-3 / (datastruct%layer2 - datastruct%layer1)
+       datastruct%units = "m^3/m^3"
+     endif
+    endif
+
+
+    if (ierr /=0 ) then
+        print *, "Can't read variable: ", VAR_NAME
+    else 
+        print *, "Successfully read variable: ", VAR_NAME
+    endif
+    !write(*, '(A, "  GRIB Editon 1")') datastruct%field
+  end subroutine read_netcdf_unit
 
 !==============================================================================
 !==============================================================================
@@ -1666,15 +1840,17 @@ contains
 !       datastruct%data = datastruct%data * 1.E-3
 !       datastruct%units = "m"
 !    endif
-
+    print *, "I am here checking: datastruct%field == ",datastruct%field
     if (datastruct%field(1:6) == "SMOIS_") then
        ! If units are kg m{-2} (that is, mm), convert to volumetric
      if ( (datastruct%units == "kg/m^2") .or. (datastruct%units == "mm") ) then
+       print *, "I am in this loop: if units == kg/m^2"
        write(*,*) "Converting soil water content to volumetric using thickness[m]: ", &
            (datastruct%layer2 - datastruct%layer1)
        datastruct%data = datastruct%data * 1.E-3 / (datastruct%layer2 - datastruct%layer1)
        datastruct%units = "m^3/m^3"
      elseif (datastruct%units == "gldas") then  ! hack to take care of bad units in GLDAS MBv3.7
+       print *, "I am in this loop: if units == glads"
        if(datastruct%field(1:7) == "SMOIS_1") datastruct%layer1 = 0
        if(datastruct%field(1:7) == "SMOIS_1") datastruct%layer2 = 0.1
        if(datastruct%field(1:7) == "SMOIS_2") datastruct%layer1 = 0.1
