@@ -13,7 +13,7 @@ call process
         call get_single_data_struct_from_grib
             call read_grib_unit
 
-Now, subroutines are created ("read_netcdf_unit" and get_single_data_struct_from_netcdf) 
+Now, subroutines are created ("read_netcdf_unit" and "get_single_data_struct_from_netcdf") 
 These two subroutines are called under get_single_data_struct_from_grib (I didn't change the name of this subroutine).
 The current call sequence is:
 call process 
@@ -24,6 +24,21 @@ call process
 Then, the expand_9pt_input and remap subroutine are called as normal.
 One more note is "expand_9pt_input" was called only in get_single_data_struct_from_grib in previous version. 
 However, since GLDAS data are in 3-hr output, hence, temporal interpolation is needed. Thus, "expand_9pt_input" is called in
-get_single_file_search_future as well. This is to smooth the data field read from future time for temporal interpolation. 
+get_single_file_search_future as well. This is to smooth the data field read from future time for temporal interpolation.
+
+In prepare for the netcdf data, some pre-processes are needed. This is similar to the pre-processes for grib data 
+in the original code. See ./HRLDAS_forcing/run/example/GLDAS/
+
+1. first step is to extract variables use this python code: extract_gldas.py
+
+2. second step is to extract initial variables use this python code: extract_gldas_init.py
+
+3. third step is to separate wind component to u and v direction, see create_UV_netcdf.perl, create_UV_netcdf.f90
+
+4. fourth step is to combine rain and snow into total precipitation rate: see combine_precips_netcdf.perl 
+and combine_precips_netcdf.f90 
+
+For 3. and 4. steps, compiling of these two .f90 codes are necessary. For compiling options, see Makefile and user_build_options set in
+top folder.
 
 Compare this branch with Mike's release branch for full comparison.
