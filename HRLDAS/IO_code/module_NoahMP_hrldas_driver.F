@@ -153,6 +153,7 @@ module module_NoahMP_hrldas_driver
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  CMXY      ! bulk momentum drag coefficient
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  CHXY      ! bulk sensible heat exchange coefficient
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  FWETXY    ! wetted or snowed fraction of the canopy (-)
+  REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  FSATXY    ! saturated fraction of the grid (-)
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  SNEQVOXY  ! snow mass at last time step(mm h2o)
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  ALBOLDXY  ! snow albedo at last time step (-)
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  QSNOWXY   ! snowfall on the ground [mm/s]
@@ -163,6 +164,7 @@ module module_NoahMP_hrldas_driver
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  SMCWTDXY  ! groundwater storage [mm]
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  DEEPRECHXY! groundwater storage [mm]
   REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  RECHXY    ! groundwater storage [mm]
+  REAL,    ALLOCATABLE, DIMENSION(:,:)    ::  WSURFXY   ! surface water storage [mm]
   REAL,    ALLOCATABLE, DIMENSION(:,:,:)  ::  TSNOXY    ! snow temperature [K]
   REAL,    ALLOCATABLE, DIMENSION(:,:,:)  ::  ZSNSOXY   ! snow layer depth [m]
   REAL,    ALLOCATABLE, DIMENSION(:,:,:)  ::  SNICEXY   ! snow layer ice [mm]
@@ -497,9 +499,27 @@ module module_NoahMP_hrldas_driver
   integer            :: spinup_loops
 
   integer            :: sf_urban_physics = 0
-  integer            :: num_urban_layers = 360
+  integer            :: num_urban_ndm    = 1
+  integer            :: num_urban_ng     = 1
+  integer            :: num_urban_nwr    = 1
+  integer            :: num_urban_ngb    = 1
+  integer            :: num_urban_nf     = 1
+  integer            :: num_urban_nz     = 1
+  integer            :: num_urban_nbui   = 1
   integer            :: num_urban_hi     = 15 
   real               :: urban_atmosphere_thickness = 2.0
+  
+  ! derived urban dimensions
+  
+  integer            :: urban_map_zrd
+  integer            :: urban_map_zwd
+  integer            :: urban_map_gd
+  integer            :: urban_map_zd
+  integer            :: urban_map_zdf
+  integer            :: urban_map_bd
+  integer            :: urban_map_wd
+  integer            :: urban_map_gbd
+  integer            :: urban_map_fbd
 
   character(len=256) :: forcing_name_T = "T2D"
   character(len=256) :: forcing_name_Q = "Q2D"
@@ -566,7 +586,10 @@ module module_NoahMP_hrldas_driver
 
        soil_data_option, pedotransfer_option, crop_option, &
 
-       sf_urban_physics,num_urban_layers,num_urban_hi,urban_atmosphere_thickness, &
+       sf_urban_physics,num_urban_hi,urban_atmosphere_thickness, &
+       num_urban_ndm,num_urban_ng,num_urban_nwr ,num_urban_ngb , &
+       num_urban_nf ,num_urban_nz,num_urban_nbui, &
+       
 
        split_output_count, & 
        khour, kday, zlvl, hrldas_setup_file, &
@@ -774,7 +797,24 @@ module module_NoahMP_hrldas_driver
 !---------------------------------------------------------------------
 !  NAMELIST check end
 !---------------------------------------------------------------------
+  
+  ! derived urban dimensions
+  
+      if (sf_urban_physics > 0 ) then
+      
+         urban_map_zrd = num_urban_ndm * num_urban_nwr * num_urban_nz
+         urban_map_zwd = num_urban_ndm * num_urban_nwr * num_urban_nz  * num_urban_nbui
+         urban_map_gd  = num_urban_ndm * num_urban_ng
+         urban_map_zd  = num_urban_ndm * num_urban_nz  * num_urban_nbui
+         urban_map_zdf = num_urban_ndm * num_urban_nz 
+         urban_map_bd  = num_urban_nz  * num_urban_nbui
+         urban_map_wd  = num_urban_ndm * num_urban_nz  * num_urban_nbui
+         urban_map_gbd = num_urban_ndm * num_urban_ngb * num_urban_nbui
+         urban_map_fbd = num_urban_ndm * (num_urban_nz - 1)  * &
+                         num_urban_nf  * num_urban_nbui
 
+      end if     
+      
 !----------------------------------------------------------------------
 ! Initialize gridded domain
 !----------------------------------------------------------------------
@@ -937,6 +977,7 @@ module module_NoahMP_hrldas_driver
   ALLOCATE ( CMXY      (XSTART:XEND,YSTART:YEND) )  ! bulk momentum drag coefficient
   ALLOCATE ( CHXY      (XSTART:XEND,YSTART:YEND) )  ! bulk sensible heat exchange coefficient
   ALLOCATE ( FWETXY    (XSTART:XEND,YSTART:YEND) )  ! wetted or snowed fraction of the canopy (-)
+  ALLOCATE ( FSATXY    (XSTART:XEND,YSTART:YEND) )  ! saturated fraction of the grid (-)
   ALLOCATE ( SNEQVOXY  (XSTART:XEND,YSTART:YEND) )  ! snow mass at last time step(mm h2o)
   ALLOCATE ( ALBOLDXY  (XSTART:XEND,YSTART:YEND) )  ! snow albedo at last time step (-)
   ALLOCATE ( QSNOWXY   (XSTART:XEND,YSTART:YEND) )  ! snowfall on the ground [mm/s]
@@ -947,6 +988,7 @@ module module_NoahMP_hrldas_driver
   ALLOCATE ( SMCWTDXY  (XSTART:XEND,YSTART:YEND) )  ! soil moisture below the bottom of the column (m3m-3)
   ALLOCATE ( DEEPRECHXY(XSTART:XEND,YSTART:YEND) )  ! recharge to the water table when deep (m)
   ALLOCATE ( RECHXY    (XSTART:XEND,YSTART:YEND) )  ! recharge to the water table (diagnostic) (m)
+  ALLOCATE ( WSURFXY   (XSTART:XEND,YSTART:YEND) )  ! surface water storage (mm)
   ALLOCATE ( TSNOXY    (XSTART:XEND,-NSNOW+1:0,    YSTART:YEND) )  ! snow temperature [K]
   ALLOCATE ( ZSNSOXY   (XSTART:XEND,-NSNOW+1:NSOIL,YSTART:YEND) )  ! snow layer depth [m]
   ALLOCATE ( SNICEXY   (XSTART:XEND,-NSNOW+1:0,    YSTART:YEND) )  ! snow layer ice [mm]
@@ -1137,14 +1179,14 @@ IF(SF_URBAN_PHYSICS > 0 )  THEN  ! any urban model
 
 !IF(SF_URBAN_PHYSICS == 2 .or. SF_URBAN_PHYSICS == 3) THEN  ! BEP or BEM urban models
          
-  ALLOCATE ( trb_urb4d      (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tw1_urb4d      (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tw2_urb4d      (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tgb_urb4d      (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( sfw1_urb3d     (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( sfw2_urb3d     (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( sfr_urb3d      (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( sfg_urb3d      (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
+  ALLOCATE ( trb_urb4d      (XSTART:XEND,urban_map_zrd,YSTART:YEND) )  !
+  ALLOCATE ( tw1_urb4d      (XSTART:XEND,urban_map_zwd,YSTART:YEND) )  !
+  ALLOCATE ( tw2_urb4d      (XSTART:XEND,urban_map_zwd,YSTART:YEND) )  !
+  ALLOCATE ( tgb_urb4d      (XSTART:XEND,urban_map_gd ,YSTART:YEND) )  !
+  ALLOCATE ( sfw1_urb3d     (XSTART:XEND,urban_map_zd ,YSTART:YEND) )  !
+  ALLOCATE ( sfw2_urb3d     (XSTART:XEND,urban_map_zd ,YSTART:YEND) )  !
+  ALLOCATE ( sfr_urb3d      (XSTART:XEND,urban_map_zdf,YSTART:YEND) )  !
+  ALLOCATE ( sfg_urb3d      (XSTART:XEND,num_urban_ndm,YSTART:YEND) )  !
 
   ALLOCATE ( hi_urb2d       (XSTART:XEND, num_urban_hi,   YSTART:YEND) )  !
 
@@ -1174,19 +1216,19 @@ IF(SF_URBAN_PHYSICS > 0 )  THEN  ! any urban model
 
 !IF(SF_URBAN_PHYSICS == 3) THEN  ! BEM urban model
          
-  ALLOCATE ( tlev_urb3d     (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( qlev_urb3d     (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tw1lev_urb3d   (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tw2lev_urb3d   (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tglev_urb3d    (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( tflev_urb3d    (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( sf_ac_urb3d    (XSTART:XEND,                 YSTART:YEND) )  !
-  ALLOCATE ( lf_ac_urb3d    (XSTART:XEND,                 YSTART:YEND) )  !
-  ALLOCATE ( cm_ac_urb3d    (XSTART:XEND,                 YSTART:YEND) )  !
-  ALLOCATE ( sfvent_urb3d   (XSTART:XEND,                 YSTART:YEND) )  !
-  ALLOCATE ( lfvent_urb3d   (XSTART:XEND,                 YSTART:YEND) )  !
-  ALLOCATE ( sfwin1_urb3d   (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
-  ALLOCATE ( sfwin2_urb3d   (XSTART:XEND,num_urban_layers,YSTART:YEND) )  !
+  ALLOCATE ( tlev_urb3d     (XSTART:XEND,urban_map_bd ,YSTART:YEND) )  !
+  ALLOCATE ( qlev_urb3d     (XSTART:XEND,urban_map_bd ,YSTART:YEND) )  !
+  ALLOCATE ( tw1lev_urb3d   (XSTART:XEND,urban_map_wd ,YSTART:YEND) )  !
+  ALLOCATE ( tw2lev_urb3d   (XSTART:XEND,urban_map_wd ,YSTART:YEND) )  !
+  ALLOCATE ( tglev_urb3d    (XSTART:XEND,urban_map_gbd,YSTART:YEND) )  !
+  ALLOCATE ( tflev_urb3d    (XSTART:XEND,urban_map_fbd,YSTART:YEND) )  !
+  ALLOCATE ( sf_ac_urb3d    (XSTART:XEND,              YSTART:YEND) )  !
+  ALLOCATE ( lf_ac_urb3d    (XSTART:XEND,              YSTART:YEND) )  !
+  ALLOCATE ( cm_ac_urb3d    (XSTART:XEND,              YSTART:YEND) )  !
+  ALLOCATE ( sfvent_urb3d   (XSTART:XEND,              YSTART:YEND) )  !
+  ALLOCATE ( lfvent_urb3d   (XSTART:XEND,              YSTART:YEND) )  !
+  ALLOCATE ( sfwin1_urb3d   (XSTART:XEND,urban_map_wd ,YSTART:YEND) )  !
+  ALLOCATE ( sfwin2_urb3d   (XSTART:XEND,urban_map_wd ,YSTART:YEND) )  !
 
 ENDIF
 
@@ -1260,6 +1302,7 @@ ENDIF
   CMXY       = undefined_real
   CHXY       = undefined_real
   FWETXY     = undefined_real
+  FSATXY     = undefined_real
   SNEQVOXY   = undefined_real
   ALBOLDXY   = undefined_real
   QSNOWXY    = undefined_real
@@ -1285,6 +1328,7 @@ ENDIF
   SMCWTDXY   = undefined_real
   DEEPRECHXY = 0.0
   RECHXY     = 0.0
+  WSURFXY    = undefined_real
   ZSNSOXY    = undefined_real
   GRDFLX     = undefined_real
   HFX        = undefined_real
@@ -1504,6 +1548,7 @@ ENDIF
      call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "QRFSXY"    , QRFSXY     )
      call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "QSPRINGSXY", QSPRINGSXY )
      call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "RECHXY"    , RECHXY     )
+     call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "WSURFXY"   , WSURFXY    )
      call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "FDEPTHXY"   ,FDEPTHXY   )
      call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "RIVERCONDXY",RIVERCONDXY)
      call get_from_restart(xstart, xend, xstart, ixfull, jxfull, "RIVERBEDXY" ,RIVERBEDXY )
@@ -1607,8 +1652,8 @@ ENDIF
                   sf_urban_physics,                         &  ! urban scheme
                   ids,ide+1, jds,jde+1, kds,kde,                &  ! domain
                   ims,ime, jms,jme, kms,kme,                &  ! memory
-                  its,ite, jts,jte, kts,kte                 &  ! tile
-                     ,smoiseq  ,smcwtdxy ,rechxy   ,deeprechxy, areaxy ,dx, dy, msftx, msfty,&
+                  its,ite, jts,jte, kts,kte,                &  ! tile
+                     smoiseq  ,smcwtdxy ,rechxy,wsurfxy,deeprechxy, areaxy ,dx, dy, msftx, msfty,&
                      wtddt    ,stepwtd  ,dtbl  ,qrfsxy ,qspringsxy  ,qslatxy,                  &
                      fdepthxy ,terrain       ,riverbedxy ,eqzwt ,rivercondxy ,pexpxy,              &
                      rechclim ,gecros_state                 &
@@ -1628,7 +1673,9 @@ ENDIF
                         TR_URB2D,      TB_URB2D,      TG_URB2D,  TC_URB2D, QC_URB2D,    & !urban
                        TRL_URB3D,     TBL_URB3D,     TGL_URB3D,                         & !urban
                         SH_URB2D,      LH_URB2D,       G_URB2D,  RN_URB2D, TS_URB2D,    & !urban
-                num_urban_layers,                                                       & !urban
+                   num_urban_ndm,  urban_map_zrd,  urban_map_zwd, urban_map_gd,          & !I multi-layer urban
+                    urban_map_zd,  urban_map_zdf,   urban_map_bd, urban_map_wd,          & !I multi-layer urban
+                   urban_map_gbd,  urban_map_fbd,                                        & !I multi-layer urban
                     num_urban_hi,                                                       & !urban
                        TRB_URB4D,     TW1_URB4D,     TW2_URB4D, TGB_URB4D,              & !urban
                       TLEV_URB3D,    QLEV_URB3D,                                        & !urban
@@ -1739,8 +1786,8 @@ ENDIF
                   sf_urban_physics,                         &  ! urban scheme
                   ids,ide+1, jds,jde+1, kds,kde,                &  ! domain
                   ims,ime, jms,jme, kms,kme,                &  ! memory
-                  its,ite, jts,jte, kts,kte                 &  ! tile
-                     ,smoiseq  ,smcwtdxy ,rechxy   ,deeprechxy, areaxy ,dx, dy, msftx, msfty,&
+                  its,ite, jts,jte, kts,kte,                &  ! tile
+                     smoiseq  ,smcwtdxy ,rechxy,wsurfxy,deeprechxy, areaxy ,dx, dy, msftx, msfty,&
                      wtddt    ,stepwtd  ,dtbl  ,qrfsxy ,qspringsxy  ,qslatxy,                  &
                      fdepthxy ,terrain       ,riverbedxy ,eqzwt ,rivercondxy ,pexpxy,              &
                      rechclim ,gecros_state                 &
@@ -1776,7 +1823,9 @@ ENDIF
                         TR_URB2D,      TB_URB2D,      TG_URB2D,  TC_URB2D, QC_URB2D,    & !urban
                        TRL_URB3D,     TBL_URB3D,     TGL_URB3D,                         & !urban
                         SH_URB2D,      LH_URB2D,       G_URB2D,  RN_URB2D, TS_URB2D,    & !urban
-                num_urban_layers,                                                       & !urban
+                   num_urban_ndm,  urban_map_zrd,  urban_map_zwd, urban_map_gd,          & !I multi-layer urban
+                    urban_map_zd,  urban_map_zdf,   urban_map_bd, urban_map_wd,          & !I multi-layer urban
+                   urban_map_gbd,  urban_map_fbd,                                        & !I multi-layer urban
                     num_urban_hi,                                                       & !urban
                        TRB_URB4D,     TW1_URB4D,     TW2_URB4D, TGB_URB4D,              & !urban
                       TLEV_URB3D,    QLEV_URB3D,                                        & !urban
@@ -2043,10 +2092,10 @@ end subroutine land_driver_ini
 		QSNOWXY, WSLAKEXY,    ZWTXY,     WAXY,      WTXY,     TSNOXY, &
 		ZSNSOXY,  SNICEXY,  SNLIQXY, LFMASSXY,  RTMASSXY,   STMASSXY, &
 		 WOODXY, STBLCPXY, FASTCPXY,      LAI,    XSAIXY,    TAUSSXY, &
-	        SMOISEQ, SMCWTDXY,DEEPRECHXY,  RECHXY,   GRAINXY,      GDDXY,PGSXY, & ! IN/OUT Noah MP only
+	        SMOISEQ, SMCWTDXY,DEEPRECHXY,  RECHXY,   WSURFXY,    GRAINXY,      GDDXY,PGSXY, & ! IN/OUT Noah MP only
                GECROS_STATE,                                                  & ! IN/OUT gecros model
 	         T2MVXY,   T2MBXY,   Q2MVXY,   Q2MBXY,                        &
-                 TRADXY,    NEEXY,    GPPXY,    NPPXY,    FVEGXY,    RUNSFXY, &
+                 TRADXY,    NEEXY,    GPPXY,    NPPXY,    FVEGXY,    RUNSFXY,     FSATXY, &
 	        RUNSBXY,   ECANXY,   EDIRXY,  ETRANXY,     FSAXY,     FIRAXY, &
                  APARXY,    PSNXY,    SAVXY,    SAGXY,   RSSUNXY,    RSSHAXY, &
                  BGAPXY,   WGAPXY,    TGVXY,    TGBXY,     CHVXY,      CHBXY, &
@@ -2105,7 +2154,10 @@ end subroutine land_driver_ini
                              julday,             yr,                                        & !H urban
                           frc_urb2d,    utype_urb2d,                                        & !I urban
                                 chs,           chs2,           cqs2,                        & !H
-                   num_urban_layers,   num_urban_hi,                                        & !I multi-layer urban
+                      num_urban_ndm,  urban_map_zrd,  urban_map_zwd, urban_map_gd,          & !I multi-layer urban
+                       urban_map_zd,  urban_map_zdf,   urban_map_bd, urban_map_wd,          & !I multi-layer urban
+                      urban_map_gbd,  urban_map_fbd,                                        & !I multi-layer urban
+                       num_urban_hi,                                                        & !I multi-layer urban
                           trb_urb4d,      tw1_urb4d,      tw2_urb4d,  tgb_urb4d,            & !H multi-layer urban
                          tlev_urb3d,     qlev_urb3d,                                        & !H multi-layer urban
                        tw1lev_urb3d,   tw2lev_urb3d,                                        & !H multi-layer urban
@@ -2227,6 +2279,8 @@ end subroutine land_driver_ini
         ! Grid water budget terms - in addition to above
               call add_to_output(UDRUNOFF   , "UGDRNOFF", "Accumulated underground runoff"       , "mm"                    )
               call add_to_output(SFCRUNOFF  , "SFCRNOFF", "Accumulatetd surface runoff"          , "mm"                    )
+              call add_to_output(WSURFXY    , "WSURF"   , "Accumulated surface water storage"    , "mm"                    )
+              call add_to_output(FSATXY     , "FSAT"    , "Saturated fraction of the grid cell"  , "-"                     )
               call add_to_output(CANLIQXY   , "CANLIQ"  , "Canopy liquid water content"          , "mm"                    )
               call add_to_output(CANICEXY   , "CANICE"  , "Canopy ice water content"             , "mm"                    )
               call add_to_output(ZWTXY      , "ZWT"     , "Depth to water table"                 , "m"                     )
@@ -2379,7 +2433,7 @@ subroutine lsm_restart()
 
   call prepare_restart_file (trim(outdir), version, igrid, llanduse, olddate, startdate, & 
        ixfull, jxfull, ixpar, jxpar, xstartpar, ystartpar,                               &
-       nsoil, nsnow, num_urban_layers, dx, dy, truelat1, truelat2, mapproj, lat1, lon1,   &
+       nsoil, nsnow, num_urban_hi, dx, dy, truelat1, truelat2, mapproj, lat1, lon1,   &
        cen_lon, iswater, ivgtyp)
   
   call add_to_restart(TSLB      , "SOIL_T", layers="SOIL")
@@ -2436,6 +2490,7 @@ subroutine lsm_restart()
   call add_to_restart(QRFSXY    , "QRFSXY"     )
   call add_to_restart(QSPRINGSXY, "QSPRINGSXY" )
   call add_to_restart(RECHXY    , "RECHXY"     )
+  call add_to_restart(WSURFXY    , "WSURFXY"     )
   call add_to_restart(QRFXY     , "QRFXY"      )
   call add_to_restart(QSPRINGXY , "QSPRINGXY"  )
   call add_to_restart(FDEPTHXY , "FDEPTHXY"  )
