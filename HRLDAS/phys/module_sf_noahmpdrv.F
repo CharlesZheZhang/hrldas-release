@@ -31,10 +31,10 @@ CONTAINS
                QSNOWXY, WSLAKEXY,    ZWTXY,      WAXY,     WTXY,    TSNOXY, & ! IN/OUT Noah MP only
 	       ZSNSOXY,  SNICEXY,  SNLIQXY,  LFMASSXY, RTMASSXY,  STMASSXY, & ! IN/OUT Noah MP only
 	        WOODXY, STBLCPXY, FASTCPXY,    XLAIXY,   XSAIXY,   TAUSSXY, & ! IN/OUT Noah MP only
-	       SMOISEQ, SMCWTDXY,DEEPRECHXY,   RECHXY,  GRAINXY,    GDDXY,PGSXY,  & ! IN/OUT Noah MP only
+	       SMOISEQ, SMCWTDXY,DEEPRECHXY,   RECHXY,  WSURFXY,   GRAINXY,    GDDXY,PGSXY,  & ! IN/OUT Noah MP only
                GECROS_STATE,                                                & ! IN/OUT gecros model
 	        T2MVXY,   T2MBXY,    Q2MVXY,   Q2MBXY,                      & ! OUT Noah MP only
-	        TRADXY,    NEEXY,    GPPXY,     NPPXY,   FVEGXY,   RUNSFXY, & ! OUT Noah MP only
+	        TRADXY,    NEEXY,    GPPXY,     NPPXY,   FVEGXY,   RUNSFXY,   FSATXY,        & ! OUT Noah MP only
 	       RUNSBXY,   ECANXY,   EDIRXY,   ETRANXY,    FSAXY,    FIRAXY, & ! OUT Noah MP only
 	        APARXY,    PSNXY,    SAVXY,     SAGXY,  RSSUNXY,   RSSHAXY, & ! OUT Noah MP only
 		BGAPXY,   WGAPXY,    TGVXY,     TGBXY,    CHVXY,     CHBXY, & ! OUT Noah MP only
@@ -215,6 +215,7 @@ CONTAINS
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(INOUT) ::  SMCWTDXY  ! soil moisture content in the layer to the water table when deep
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(INOUT) ::  DEEPRECHXY ! recharge to the water table when deep
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(INOUT) ::  RECHXY    ! recharge to the water table (diagnostic) 
+    REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(INOUT) ::  WSURFXY   ! surface water storage value accumulation value
 
 ! OUT (with no Noah LSM equivalent)
 
@@ -228,6 +229,7 @@ CONTAINS
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  NPPXY     ! net primary productivity [g/m2/s C]
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  FVEGXY    ! Noah-MP vegetation fraction [-]
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  RUNSFXY   ! surface runoff [mm/s]
+    REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  FSATXY    ! saturated fraction of the gird (-) from TOPMODEL
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  RUNSBXY   ! subsurface runoff [mm/s]
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  ECANXY    ! evaporation of intercepted water (mm/s)
     REAL,    DIMENSION( ims:ime,          jms:jme ), INTENT(OUT  ) ::  EDIRXY    ! soil surface evaporation rate (mm/s]
@@ -334,6 +336,7 @@ CONTAINS
     REAL                                :: SMCWTD       ! soil moisture content in the layer to the water table when deep
     REAL                                :: DEEPRECH     ! recharge to the water table when deep
     REAL                                :: RECH         ! recharge to the water table (diagnostic)  
+    REAL                                :: WSURF        ! surface water storage value 
     REAL, DIMENSION(-2:NSOIL)           :: ZSNSO        ! snow layer depth [m]
     REAL, DIMENSION(-2:              0) :: SNICE        ! snow layer ice [mm]
     REAL, DIMENSION(-2:              0) :: SNLIQ        ! snow layer liquid water [mm]
@@ -363,6 +366,7 @@ CONTAINS
     REAL                                :: NPP          ! net primary productivity [g/m2/s C]
     REAL                                :: FVEGMP       ! greenness vegetation fraction [-]
     REAL                                :: RUNSF        ! surface runoff [mm/s]
+    REAL                                :: FSAT         ! saturated fraction of the grid
     REAL                                :: RUNSB        ! subsurface runoff [mm/s]
     REAL                                :: ECAN         ! evaporation of intercepted water (mm/s)
     REAL                                :: ETRAN        ! transpiration rate (mm/s)
@@ -375,6 +379,8 @@ CONTAINS
     REAL                                :: SAG          ! solar rad absorbed by ground (w/m2)
     REAL                                :: RSSUN        ! sunlit leaf stomatal resistance (s/m)
     REAL                                :: RSSHA        ! shaded leaf stomatal resistance (s/m)
+    REAL, DIMENSION(1:2)                :: ALBSND       ! snow albedo (direct)
+    REAL, DIMENSION(1:2)                :: ALBSNI       ! snow albedo (diffuse)
     REAL                                :: RB           ! leaf boundary layer resistance (s/m)
     REAL                                :: LAISUN       ! sunlit leaf area index (m2/m2)
     REAL                                :: LAISHA       ! shaded leaf area index (m2/m2)
@@ -606,6 +612,7 @@ CONTAINS
        CM                    = CMXY    (I,J)                ! avg. momentum exchange (MP only) [m/s]
        CH                    = CHXY    (I,J)                ! avg. heat exchange (MP only) [m/s]
        FWET                  = FWETXY  (I,J)                ! canopy fraction wet or snow
+       FSAT                  = FSATXY  (I,J)                ! saturated fraction of the grid (-) from topmodel
        SNEQVO                = SNEQVOXY(I,J)                ! SWE previous timestep
        ALBOLD                = ALBOLDXY(I,J)                ! albedo previous timestep, for snow aging
        QSNOW                 = QSNOWXY (I,J)                ! snow falling on ground
@@ -628,6 +635,7 @@ CONTAINS
        SMCEQ(       1:NSOIL) = SMOISEQ (I,       1:NSOIL,J)
        SMCWTD                = SMCWTDXY(I,J)
        RECH                  = 0.
+       WSURF                 = WSURFXY(I,J)
        DEEPRECH              = 0.  
 
        if(iopt_crop == 2) then   ! gecros crop model
@@ -784,6 +792,7 @@ CONTAINS
          EAH    = undefined_value 
          TAH    = undefined_value
          FWET   = undefined_value 
+         FSAT   = undefined_value
          WSLAKE = undefined_value 
 !         ZWT    = undefined_value 
          WA     = undefined_value 
@@ -840,7 +849,7 @@ CONTAINS
          Z0WRF  = 0.002
          QFX(I,J) = ESOIL
          LH (I,J) = FGEV
-
+         WSURF  = undefined_value
 
     ELSE
          ICE=0                              ! Neither sea ice or land ice.
@@ -861,15 +870,16 @@ CONTAINS
             STMASS  , WOOD    , STBLCP  , FASTCP  , PLAI    , PSAI    , & ! IN/OUT : 
             CM      , CH      , TAUSS   ,                               & ! IN/OUT : 
             GRAIN   , GDD     , PGS     ,                               & ! IN/OUT 
-            SMCWTD  ,DEEPRECH , RECH    ,                               & ! IN/OUT :
+            SMCWTD  ,DEEPRECH , RECH    , WSURF   ,                     & ! IN/OUT :
             GECROS1D,                                                   & ! IN/OUT :
             Z0WRF   ,                                                   &
             FSA     , FSR     , FIRA    , FSH     , SSOIL   , FCEV    , & ! OUT : 
             FGEV    , FCTR    , ECAN    , ETRAN   , ESOIL   , TRAD    , & ! OUT : 
             TGB     , TGV     , T2MV    , T2MB    , Q2MV    , Q2MB    , & ! OUT : 
-            RUNSF   , RUNSB   , APAR    , PSN     , SAV     , SAG     , & ! OUT : 
+            RUNSF   , FSAT    , RUNSB   , APAR    , PSN     , SAV     , SAG     , & ! OUT : 
             FSNO    , NEE     , GPP     , NPP     , FVEGMP  , SALB    , & ! OUT : 
             QSNBOT  , PONDING , PONDING1, PONDING2, RSSUN   , RSSHA   , & ! OUT : 
+            ALBSND  , ALBSNI  ,                                         & ! OUT :
             BGAP    , WGAP    , CHV     , CHB     , EMISSI  ,           & ! OUT : 
             SHG     , SHC     , SHB     , EVG     , EVB     , GHV     , & ! OUT :
 	    GHB     , IRG     , IRC     , IRB     , TR      , EVC     , & ! OUT :
@@ -881,7 +891,7 @@ CONTAINS
             )            ! OUT :
                   
             QFX(I,J) = ECAN + ESOIL + ETRAN
-            LH       (I,J)                = FCEV + FGEV + FCTR
+            LH(I,J)  = FCEV + FGEV  + FCTR
 
    ENDIF ! glacial split ends 
 
@@ -927,6 +937,7 @@ CONTAINS
              CMXY     (I,J)                = CM
              CHXY     (I,J)                = CH
              FWETXY   (I,J)                = FWET
+             FSATXY   (I,J)                = FSAT
              SNEQVOXY (I,J)                = SNEQVO
              ALBOLDXY (I,J)                = ALBOLD
              QSNOWXY  (I,J)                = QSNOW
@@ -962,6 +973,7 @@ CONTAINS
              NPPXY    (I,J)                = NPP
              FVEGXY   (I,J)                = FVEGMP
              RUNSFXY  (I,J)                = RUNSF
+             FSATXY   (I,J)                = FSAT
              RUNSBXY  (I,J)                = RUNSB
              ECANXY   (I,J)                = ECAN
              EDIRXY   (I,J)                = ESOIL
@@ -1009,6 +1021,7 @@ CONTAINS
              CHB2XY   (I,J)                = CHB2
              RECHXY   (I,J)                = RECHXY(I,J) + RECH*1.E3 !RECHARGE TO THE WATER TABLE
              DEEPRECHXY(I,J)               = DEEPRECHXY(I,J) + DEEPRECH
+             WSURFXY  (I,J)                = WSURF
              SMCWTDXY(I,J)                 = SMCWTD
 
              GRAINXY  (I,J) = GRAIN !GRAIN XING
@@ -1198,7 +1211,19 @@ SUBROUTINE TRANSFER_MP_PARAMETERS(VEGTYPE,SOILTYPE,SLOPETYPE,SOILCOLOR,CROPTYPE,
    parameters%Z0SNO      =       Z0SNO_TABLE
    parameters%SSI        =         SSI_TABLE
    parameters%SWEMX      =       SWEMX_TABLE
+   parameters%TAU0         =      TAU0_TABLE
+   parameters%GRAIN_GROWTH = GRAIN_GROWTH_TABLE
+   parameters%EXTRA_GROWTH = EXTRA_GROWTH_TABLE
+   parameters%DIRT_SOOT    =    DIRT_SOOT_TABLE
+   parameters%BATS_COSZ    =    BATS_COSZ_TABLE
+   parameters%BATS_VIS_NEW = BATS_VIS_NEW_TABLE
+   parameters%BATS_NIR_NEW = BATS_NIR_NEW_TABLE
+   parameters%BATS_VIS_AGE = BATS_VIS_AGE_TABLE
+   parameters%BATS_NIR_AGE = BATS_NIR_AGE_TABLE
+   parameters%BATS_VIS_DIR = BATS_VIS_DIR_TABLE
+   parameters%BATS_NIR_DIR = BATS_NIR_DIR_TABLE
    parameters%RSURF_SNOW =  RSURF_SNOW_TABLE
+   parameters%RSURF_EXP  =   RSURF_EXP_TABLE
 
 ! ----------------------------------------------------------------------
 !  Transfer soil parameters
@@ -1253,6 +1278,8 @@ SUBROUTINE PEDOTRANSFER_SR2006(nsoil,sand,clay,orgm,parameters)
   use module_sf_noahmplsm
   use noahmp_tables
         
+  implicit none
+        
   integer,                    intent(in   ) :: nsoil     ! number of soil layers
   real, dimension( 1:nsoil ), intent(inout) :: sand
   real, dimension( 1:nsoil ), intent(inout) :: clay
@@ -1268,6 +1295,7 @@ SUBROUTINE PEDOTRANSFER_SR2006(nsoil,sand,clay,orgm,parameters)
   real, dimension( 1:nsoil ) :: psi_e
     
   type(noahmp_parameters), intent(inout) :: parameters
+  integer :: k
 
   do k = 1,4
     if(sand(k) <= 0 .or. clay(k) <= 0) then
@@ -1379,7 +1407,7 @@ SUBROUTINE PEDOTRANSFER_SR2006(nsoil,sand,clay,orgm,parameters)
        ids,ide, jds,jde, kds,kde,                &
        ims,ime, jms,jme, kms,kme,                &
        its,ite, jts,jte, kts,kte,                &
-       smoiseq  ,smcwtdxy ,rechxy   ,deeprechxy, areaxy, dx, dy, msftx, msfty,&     ! Optional groundwater
+       smoiseq  ,smcwtdxy ,rechxy   ,wsurfxy    ,deeprechxy  , areaxy , dx, dy, msftx, msfty,&     ! Optional groundwater
        wtddt    ,stepwtd  ,dt       ,qrfsxy     ,qspringsxy  , qslatxy    ,  &      ! Optional groundwater
        fdepthxy ,ht     ,riverbedxy ,eqzwt     ,rivercondxy ,pexpxy       ,  &      ! Optional groundwater
        rechclim,                                                             &      ! Optional groundwater
@@ -1469,6 +1497,7 @@ SUBROUTINE PEDOTRANSFER_SR2006(nsoil,sand,clay,orgm,parameters)
     REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: smcwtdxy    !deep soil moisture content [m3m-3]
     REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: deeprechxy  !deep recharge [m]
     REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: rechxy      !accumulated recharge [mm]
+    REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: wsurfxy     !accumulated surface water storage [mm]
     REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: qrfsxy      !accumulated flux from groundwater to rivers [mm]
     REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: qspringsxy  !accumulated seeping water [mm]
     REAL, DIMENSION(ims:ime,jms:jme), INTENT(INOUT) , OPTIONAL :: qslatxy     !accumulated lateral flow [mm]
@@ -1655,6 +1684,7 @@ SUBROUTINE PEDOTRANSFER_SR2006(nsoil,sand,clay,orgm,parameters)
              alboldxy   (I,J) = 0.65
              qsnowxy    (I,J) = 0.0
              wslakexy   (I,J) = 0.0
+             wsurfxy    (I,J) = 0.0 
 
              if(iopt_run.ne.5) then 
                    waxy       (I,J) = 4900.                                       !???
@@ -2434,6 +2464,7 @@ REAL, DIMENSION(1:60), INTENT(INOUT) :: STATE_GECROS
 end function checkIfHarvest
 
 !------------------------------------------------------------------------------------------
+
   SUBROUTINE noahmp_urban(sf_urban_physics,   NSOIL,         IVGTYP,  ITIMESTEP,            & ! IN : Model configuration 
                                  DT,     COSZ_URB2D,     XLAT_URB2D,                        & ! IN : Time/Space-related
                                 T3D,           QV3D,          U_PHY,      V_PHY,   SWDOWN,  & ! IN : Forcing
@@ -2462,7 +2493,9 @@ end function checkIfHarvest
                              julian,          julyr,                                        & !H urban
                           frc_urb2d,    utype_urb2d,                                        & !I urban
                                 chs,           chs2,           cqs2,                        & !H
-                   num_urban_layers,                                                        & !I multi-layer urban
+                      num_urban_ndm,  urban_map_zrd,  urban_map_zwd, urban_map_gd,          & !I multi-layer urban
+                       urban_map_zd,  urban_map_zdf,   urban_map_bd, urban_map_wd,          & !I multi-layer urban
+                      urban_map_gbd,  urban_map_fbd,                                        & !I multi-layer urban
                        num_urban_hi,                                                        & !I multi-layer urban
                           trb_urb4d,      tw1_urb4d,      tw2_urb4d,  tgb_urb4d,            & !H multi-layer urban
                          tlev_urb3d,     qlev_urb3d,                                        & !H multi-layer urban
@@ -2693,7 +2726,16 @@ end function checkIfHarvest
      REAL, OPTIONAL,                                                    INTENT(IN   ) :: GMT
      INTEGER, OPTIONAL,                                                 INTENT(IN   ) :: JULDAY
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(IN   ) :: XLAT, XLONG
-     INTEGER,                                                           INTENT(IN   ) :: NUM_URBAN_LAYERS
+     INTEGER,                                                           INTENT(IN   ) :: num_urban_ndm
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_zrd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_zwd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_gd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_zd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_zdf
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_bd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_wd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_gbd
+     INTEGER,                                                           INTENT(IN   ) :: urban_map_fbd
      INTEGER,                                                           INTENT(IN   ) :: NUM_URBAN_HI
      REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_hi, jms:jme ),     INTENT(IN   ) :: hi_urb2d
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(IN   ) :: lp_urb2d
@@ -2703,27 +2745,27 @@ end function checkIfHarvest
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(IN   ) :: stdh_urb2d
      REAL, OPTIONAL, DIMENSION( ims:ime, 4, jms:jme ),                  INTENT(IN   ) :: lf_urb2d
 
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: trb_urb4d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tw1_urb4d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tw2_urb4d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tgb_urb4d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tlev_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: qlev_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tw1lev_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tw2lev_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tglev_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: tflev_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zrd, jms:jme ),    INTENT(INOUT) :: trb_urb4d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zwd, jms:jme ),    INTENT(INOUT) :: tw1_urb4d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zwd, jms:jme ),    INTENT(INOUT) :: tw2_urb4d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gd , jms:jme ),    INTENT(INOUT) :: tgb_urb4d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_bd , jms:jme ),    INTENT(INOUT) :: tlev_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_bd , jms:jme ),    INTENT(INOUT) :: qlev_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_wd , jms:jme ),    INTENT(INOUT) :: tw1lev_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_wd , jms:jme ),    INTENT(INOUT) :: tw2lev_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_gbd, jms:jme ),    INTENT(INOUT) :: tglev_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_fbd, jms:jme ),    INTENT(INOUT) :: tflev_urb3d
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(INOUT) :: lf_ac_urb3d
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(INOUT) :: sf_ac_urb3d
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(INOUT) :: cm_ac_urb3d
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(INOUT) :: sfvent_urb3d
      REAL, OPTIONAL, DIMENSION( ims:ime, jms:jme ),                     INTENT(INOUT) :: lfvent_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: sfwin1_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: sfwin2_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: sfw1_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: sfw2_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: sfr_urb3d
-     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_layers, jms:jme ), INTENT(INOUT) :: sfg_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_wd , jms:jme ),    INTENT(INOUT) :: sfwin1_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_wd , jms:jme ),    INTENT(INOUT) :: sfwin2_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zd , jms:jme ),    INTENT(INOUT) :: sfw1_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zd , jms:jme ),    INTENT(INOUT) :: sfw2_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:urban_map_zdf, jms:jme ),    INTENT(INOUT) :: sfr_urb3d
+     REAL, OPTIONAL, DIMENSION( ims:ime, 1:num_urban_ndm, jms:jme ),    INTENT(INOUT) :: sfg_urb3d
      REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ),            INTENT(INOUT) :: a_u_bep   !Implicit momemtum component X-direction
      REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ),            INTENT(INOUT) :: a_v_bep   !Implicit momemtum component Y-direction
      REAL, OPTIONAL, DIMENSION( ims:ime, kms:kme, jms:jme ),            INTENT(INOUT) :: a_t_bep   !Implicit component pot. temperature
@@ -3016,7 +3058,9 @@ END DO
               th_phy,          rho,     p_phy,     swdown,    glw, &
                  gmt,       julday,     xlong,       xlat,         &
           declin_urb,   cosz_urb2d, omg_urb2d,                     &
-    num_urban_layers, num_urban_hi,                                &
+       num_urban_ndm, urban_map_zrd, urban_map_zwd, urban_map_gd,  &
+        urban_map_zd, urban_map_zdf,  urban_map_bd, urban_map_wd,  &
+       urban_map_gbd, urban_map_fbd,  num_urban_hi,                &
            trb_urb4d,    tw1_urb4d, tw2_urb4d,  tgb_urb4d,         &
           sfw1_urb3d,   sfw2_urb3d, sfr_urb3d,  sfg_urb3d,         &
             lp_urb2d,     hi_urb2d,  lb_urb2d,  hgt_urb2d,         &
@@ -3050,7 +3094,9 @@ END DO
                    th_phy,          rho,        p_phy,       swdown,  glw, &
                       gmt,       julday,        xlong,         xlat,       &
                declin_urb,   cosz_urb2d,    omg_urb2d,                     &
-         num_urban_layers, num_urban_hi,                                   &
+            num_urban_ndm, urban_map_zrd, urban_map_zwd, urban_map_gd,     &
+             urban_map_zd, urban_map_zdf,  urban_map_bd, urban_map_wd,     &
+            urban_map_gbd, urban_map_fbd,  num_urban_hi,                   &
                 trb_urb4d,    tw1_urb4d,    tw2_urb4d,    tgb_urb4d,       &
                tlev_urb3d,   qlev_urb3d, tw1lev_urb3d, tw2lev_urb3d,       &
               tglev_urb3d,  tflev_urb3d,  sf_ac_urb3d,  lf_ac_urb3d,       &
