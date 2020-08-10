@@ -2170,7 +2170,8 @@ end subroutine land_driver_ini
 	 
 	 ENDIF 
 
-  IF(RUNOFF_OPTION.EQ.5.AND.MOD(ITIME,STEPWTD).EQ.0)THEN
+  IF(RUNOFF_OPTION.EQ.5)THEN
+    IF(MOD(ITIME,STEPWTD).EQ.0)THEN
            CALL wrf_message('calling WTABLE' )
 
 !gmm update wtable from lateral flow and shed water to rivers
@@ -2222,8 +2223,8 @@ end subroutine land_driver_ini
 !             ENDDO                                                !urban
 !           ENDDO                                                  !urban
 !         ENDIF
-
- ENDIF
+    ENDIF
+  ENDIF
 
 !------------------------------------------------------------------------
 ! END of surface_driver consistent code
