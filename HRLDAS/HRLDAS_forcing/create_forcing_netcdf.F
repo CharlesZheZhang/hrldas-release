@@ -95,6 +95,7 @@ program create_forcing
   integer :: ihour
   integer :: numarg
   integer :: unmatched
+  logical :: proc_ic
 #ifndef _GFORTRAN_
   ! For some reason, gfortran does not like this declared external,
   ! but everyone else wants it declared external.  So we use #ifndef
@@ -445,7 +446,17 @@ program create_forcing
      call error_handler(ierr, "Problem closing Netcdf file")
 
      if ( full_ic_frq > -1 ) then  ! full_ic_frq == -1 turns off extra processing for initial conditions.
-        if ( ( (full_ic_frq>0) .and. (mod(ihour, full_ic_frq)==0) ) .or. ( ihour==0 ) ) then
+        
+        ! Workaround for problem with mod( , 0) --> Invalid arithmetic operation
+        proc_ic = .False.
+        if ( full_ic_frq>0 ) then
+           if ( mod(ihour, full_ic_frq)==0 ) then
+              proc_ic = .True.
+           end if
+        end if
+        !
+        
+        if ( ( ihour==0 ) .or. ( proc_ic .eqv. .True. ) ) then
 
            call open_netcdf_for_output( trim(OutputDir)//"HRLDAS_setup_"//date(1:4)//date(6:7)//date(9:10)//date(12:13)//"_d"//hgrid, &
              ncid, version, geo_em%idim, geo_em%jdim, geo_em, .true.)

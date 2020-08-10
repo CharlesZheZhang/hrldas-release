@@ -8,18 +8,18 @@ system ("make");
 	 "20","21","22","23","24","25","26","27","28","29", 
 	 "30","31");
 	 
-@yrs = ("00");
+@yrs = ("10");
 
-$day_start = 275;
-$day_end = 275;
+$day_start = 1;
+$day_end = 3;
 
 @hrs = ("00","03","06","09","12","15","18","21");
 
 @noleap_days = (0,31,59,90,120,151,181,212,243,273,304,334,365);
 @leap_days   = (0,31,60,91,121,152,182,213,244,274,305,335,366);
 
-$data_dir = "/glade/work/zhezhang/GLDAS/extracted";
-$results_dir = "/glade/work/zhezhang/GLDAS/extracted";
+$data_dir = "/opt/ARW/DATA/GLDAS/extracted";
+$results_dir = "/opt/ARW/DATA/GLDAS/extracted";
 
 for $yy (@yrs)
  {
@@ -33,7 +33,7 @@ for($julday=$day_start;$julday<=$day_end;$julday++)
  # This little section finds the text month and day
  
  @modays = @noleap_days;
- if($yy == "00" || $yy == "04" || $yy == "08" || $yy == "12") {@modays = @leap_days}
+ if($yy == "00" || $yy == "04" || $yy == "08" || $yy == "12" || $yy == "16" || $yy == "20" || $yy == "24" || $yy == "28") {@modays = @leap_days}
 
  for($mo=1;$mo<=12;$mo++)
   {
@@ -46,17 +46,16 @@ for($julday=$day_start;$julday<=$day_end;$julday++)
 
 for $hr (@hrs)
  {
+  system ("mkdir -p $results_dir/U $results_dir/V");
 
   $file_in  =    "$data_dir/Wind/GLDAS_Wind_f_inst_20$yy$nums[$mon]$nums[$day]$hr";
   $file1_out =  " $results_dir/U/GLDAS_U_f_inst_20$yy$nums[$mon]$nums[$day]$hr";
   $file2_out =  " $results_dir/V/GLDAS_V_f_inst_20$yy$nums[$mon]$nums[$day]$hr";
 
-  print ("$file_in \n");
-  print ("$file1_out \n");
-  print ("$file2_out \n");
+  print ("./$filename $file_in $file1_out $file2_out\n");
   system ("./$filename $file_in $file1_out $file2_out");
  }
  }
  } # End of outer time loop
 
-system("rm $filename");
+ system("rm $filename");
